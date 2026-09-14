@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HDS Local Delivery — End-to-End Flow</title>
+<style>
+  :root{
+    --bg:#070a12; --panel:rgba(255,255,255,.045); --line:rgba(255,255,255,.09);
+    --green:#2dd4a7; --green2:#10b981; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
+    --txt:#e9edf6; --dim:#8b95ab; --wa:#00a884;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt); min-height:100vh; overflow-x:hidden;
+    font-family:-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column;
+  }
+  .bg{position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(700px 420px at 12% -8%, rgba(45,212,167,.14), transparent 60%),
+      radial-gradient(700px 420px at 88% -8%, rgba(251,191,36,.10), transparent 60%),
+      radial-gradient(900px 500px at 50% 115%, rgba(96,165,250,.08), transparent 60%);}
+  .bg::after{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(80% 70% at 50% 30%,#000 30%,transparent 100%);}
+
+  /* ---------- header ---------- */
+  header{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;
+    gap:18px;padding:18px 28px 6px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:14px}
+  .mark{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;font-weight:800;
+    font-size:15px;letter-spacing:.5px;color:#04120d;
+    background:linear-gradient(135deg,#5eead4,#10b981 60%,#059669);
+    box-shadow:0 6px 24px rgba(16,185,129,.35), inset 0 1px 0 rgba(255,255,255,.5)}
+  h1{font-size:21px;font-weight:800;letter-spacing:.2px}
+  h1 em{font-style:normal;background:linear-gradient(90deg,#5eead4,#fbbf24);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand p{font-size:12px;color:var(--dim);margin-top:2px;letter-spacing:.4px}
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pills{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--dim);
+    font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:999px;transition:.25s;user-select:none}
+  .pill:hover{color:var(--txt);border-color:rgba(255,255,255,.25)}
+  .pill.on{color:#04120d;background:linear-gradient(135deg,#5eead4,#10b981);border-color:transparent;
+    box-shadow:0 4px 18px rgba(16,185,129,.35)}
+  .play{cursor:pointer;border:none;border-radius:999px;padding:11px 22px;font-weight:800;font-size:13.5px;
+    color:#04120d;background:linear-gradient(135deg,#fde68a,#f59e0b);
+    box-shadow:0 6px 22px rgba(245,158,11,.35);transition:.2s;letter-spacing:.4px}
+  .play:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(245,158,11,.45)}
+  .play:active{transform:scale(.97)}
+
+  main{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding:6px 28px 18px;gap:14px}
+
+  /* ---------- journey track ---------- */
+  .track{position:relative;height:104px;flex:none}
+  .line{position:absolute;top:40px;left:6.25%;right:6.25%;height:3px;border-radius:3px;
+    background:rgba(255,255,255,.08)}
+  .fill{position:absolute;top:40px;left:6.25%;height:3px;width:0;border-radius:3px;
+    background:linear-gradient(90deg,#10b981,#5eead4);box-shadow:0 0 12px rgba(45,212,167,.8);
+    transition:width 1s cubic-bezier(.65,0,.35,1)}
+  .stations{position:absolute;inset:0;display:flex}
+  .st{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:18px}
+  .st-ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--dim);
+    transition:.45s cubic-bezier(.34,1.4,.64,1)}
+  .st-ic svg{width:22px;height:22px}
+  .st-lb{font-size:10.5px;font-weight:700;letter-spacing:.6px;color:var(--dim);text-transform:uppercase;
+    transition:.3s;text-align:center}
+  .st.done .st-ic{background:rgba(16,185,129,.16);border-color:rgba(45,212,167,.5);color:var(--green)}
+  .st.done .st-lb{color:var(--green)}
+  .st.active .st-ic{background:linear-gradient(135deg,#5eead4,#10b981);color:#04120d;transform:scale(1.18);
+    border-color:transparent;box-shadow:0 0 0 6px rgba(45,212,167,.12),0 8px 26px rgba(16,185,129,.5)}
+  .st.active .st-lb{color:#fff}
+  .orb{position:absolute;top:40px;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff,#5eead4 45%,#059669);
+    box-shadow:0 0 20px 7px rgba(45,212,167,.55);z-index:5;
+    transition:left 1.05s cubic-bezier(.65,0,.35,1);display:grid;place-items:center;opacity:0}
+  .orb.go{opacity:1}
+  .orb svg{width:13px;height:13px;color:#04352a}
+
+  /* ---------- stage ---------- */
+  .stage{flex:1;display:flex;gap:14px;min-height:0}
+  .scene{flex:1;position:relative;border:1px solid var(--line);border-radius:22px;overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));
+    display:grid;place-items:center;min-height:430px}
+  .scene>*{animation:sceneIn .45s cubic-bezier(.22,1,.36,1)}
+  @keyframes sceneIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+
+  .ticket{width:238px;flex:none;border:1px solid var(--line);border-radius:22px;padding:18px;
+    background:var(--panel)}
+  .ticket h3{font-size:11px;letter-spacing:1.6px;color:var(--dim);margin-bottom:14px;font-weight:800}
+  .ticket ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .tk{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:700;color:var(--dim);
+    letter-spacing:.4px;transition:.3s;opacity:.45}
+  .tk .dot{width:18px;height:18px;flex:none;border-radius:50%;border:2px solid rgba(255,255,255,.14);
+    display:grid;place-items:center;font-size:9px;color:transparent;transition:.3s}
+  .tk.done{opacity:1;color:#bfe9db}
+  .tk.done .dot{background:var(--green2);border-color:var(--green2);color:#04120d}
+  .tk.now{opacity:1;color:#fff}
+  .tk.now .dot{border-color:var(--amber);box-shadow:0 0 0 4px rgba(251,191,36,.15);animation:tkpulse 1s infinite}
+  @keyframes tkpulse{50%{box-shadow:0 0 0 7px rgba(251,191,36,.05)}}
+  .ticket .tot{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-size:11px;color:var(--dim)}
+
+  .narr{flex:none;border:1px solid var(--line);border-radius:16px;background:var(--panel);
+    padding:13px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+  #narrText{font-size:14px;font-weight:600;color:#d7deeb;transition:opacity .25s}
+  #narrText.fade{opacity:0}
+  .stepc{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:1px;white-space:nowrap}
+
+  /* ---------- WhatsApp phone ---------- */
+  .phone{width:295px;height:400px;border-radius:30px;background:#0b141a;overflow:hidden;
+    border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 60px rgba(0,0,0,.55),0 0 0 8px rgba(255,255,255,.03);
+    display:flex;flex-direction:column}
+  .wa-head{display:flex;align-items:center;gap:10px;padding:11px 13px;background:#1f2c34;flex:none}
+  .wa-av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;
+    font-size:14px;color:#04120d;background:linear-gradient(135deg,#5eead4,#10b981)}
+  .wa-head b{font-size:13.5px;display:block;color:#e9edef}
+  .wa-head span{font-size:10.5px;color:#7fbfae;display:block}
+  .wa-body{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:7px;overflow:hidden;
+    background:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1.4px);background-size:16px 16px}
+  .wa-in{flex:none;margin:9px;padding:9px 14px;border-radius:999px;background:#1f2c34;color:#5b6b78;
+    font-size:12px}
+  .bub{max-width:82%;padding:8px 11px;border-radius:11px;font-size:12.5px;line-height:1.45;
+    animation:pop .35s cubic-bezier(.34,1.56,.64,1);box-shadow:0 1px 2px rgba(0,0,0,.3);position:relative}
+  @keyframes pop{from{opacity:0;transform:scale(.7) translateY(8px)}to{opacity:1;transform:none}}
+  .bub.cust{margin-left:auto;background:#005c4b;color:#eafff6;border-bottom-right-radius:3px}
+  .bub.bot{background:#1f2c34;color:#e9edf3;border-bottom-left-radius:3px}
+  .bub .t{display:block;text-align:right;font-size:9px;color:rgba(255,255,255,.45);margin-top:3px}
+  .bub.sys{align-self:center;background:#182229;color:#9fb3c8;font-size:10.5px;border-radius:8px;padding:6px 12px}
+  .typing{display:flex;gap:4px;padding:11px 13px;width:auto}
+  .typing i{width:6px;height:6px;border-radius:50%;background:#8696a0;animation:tdot 1s infinite}
+  .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+  @keyframes tdot{40%{transform:translateY(-4px);background:#c6d3dc}}
+  .qc{background:#0e1620;border:1px solid rgba(45,212,167,.35);border-radius:9px;padding:9px 10px;margin-top:4px}
+  .qc b{font-size:10px;letter-spacing:1px;color:var(--green);display:block;margin-bottom:6px}
+  .qr{display:flex;justify-content:space-between;font-size:10.5px;color:#c7d2e0;gap:14px;padding:1.5px 0}
+  .qt{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#fff;
+    border-top:1px dashed rgba(255,255,255,.18);margin-top:5px;padding-top:5px}
+  .chip{display:inline-block;border:1.5px solid var(--wa);color:#7ee2c8;border-radius:999px;
+    padding:6px 12px;font-size:11px;font-weight:700;margin:3px 4px 0 0;animation:pop .4s}
+  .chip.sel{background:var(--wa);color:#04120d}
+  .paybtn{display:block;text-align:center;background:linear-gradient(135deg,#38bdf8,#2563eb);color:#fff;
+    font-weight:800;font-size:12px;border-radius:9px;padding:9px;margin-top:6px;letter-spacing:.3px;
+    box-shadow:0 4px 14px rgba(37,99,235,.4)}
+
+  /* ---------- dashboard ---------- */
+  .panel{width:min(580px,92%);border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    box-shadow:0 30px 60px rgba(0,0,0,.4)}
+  .p-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+    border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+  .p-head b{font-size:13px;letter-spacing:.4px}
+  .p-tag{font-size:9.5px;font-weight:800;letter-spacing:1px;padding:4px 9px;border-radius:6px;
+    background:rgba(45,212,167,.14);color:var(--green);border:1px solid rgba(45,212,167,.35)}
+  .rows{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .orow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;
+    background:rgba(255,255,255,.03);border:1px solid transparent;font-size:11.5px;color:#c7d2e0;
+    animation:pop .4s}
+  .orow .oid{font-weight:800;color:#fff}
+  .orow .sp{flex:1}
+  .tag{font-size:9px;font-weight:800;letter-spacing:.8px;padding:4px 8px;border-radius:6px}
+  .tag.warn{background:rgba(251,191,36,.13);color:var(--amber);border:1px solid rgba(251,191,36,.35)}
+  .tag.ok{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.4)}
+  .tag.info{background:rgba(96,165,250,.13);color:var(--blue);border:1px solid rgba(96,165,250,.35)}
+  .tag.bad{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.4)}
+  .orow.hot{border-color:rgba(251,191,36,.55);box-shadow:0 0 0 4px rgba(251,191,36,.08);
+    animation:hotp 1s infinite}
+  @keyframes hotp{50%{box-shadow:0 0 0 8px rgba(251,191,36,.03)}}
+  .act{margin:0 12px 12px;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:12.5px;
+    letter-spacing:.6px;color:#04120d;background:linear-gradient(135deg,#5eead4,#10b981);
+    display:block;width:calc(100% - 24px);cursor:pointer;transition:.15s;box-shadow:0 6px 18px rgba(16,185,129,.3)}
+  .act.press{transform:scale(.96);filter:brightness(1.15)}
+  .act.amber{background:linear-gradient(135deg,#fde68a,#f59e0b);box-shadow:0 6px 18px rgba(245,158,11,.3)}
+  .p-foot{padding:10px 16px;font-size:11px;color:var(--dim);border-top:1px solid var(--line)}
+
+  .duo{display:flex;gap:20px;align-items:center}
+  .duo .phone{transform:scale(.82)}
+
+  /* form fields (in-store) */
+  .fld{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;border-radius:9px;
+    background:rgba(255,255,255,.03);font-size:11.5px;color:#c7d2e0;margin:0 12px 6px}
+  .fld b{color:#fff}
+  .fld .cursor{color:var(--green);animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ---------- stamp / big states ---------- */
+  .stamp{position:absolute;inset:0;display:grid;place-items:center;z-index:9;pointer-events:none}
+  .stamp i{font-style:normal;font-size:19px;font-weight:900;letter-spacing:3px;padding:13px 26px;
+    border:3px solid;border-radius:12px;transform:rotate(-8deg);background:rgba(7,10,18,.75);
+    backdrop-filter:blur(3px);animation:stampIn .45s cubic-bezier(.34,1.6,.64,1)}
+  @keyframes stampIn{from{opacity:0;transform:rotate(-8deg) scale(2.2)}to{opacity:1;transform:rotate(-8deg) scale(1)}}
+  .stamp.ok i{color:var(--green);border-color:var(--green);box-shadow:0 0 30px rgba(45,212,167,.35)}
+  .stamp.bad i{color:var(--red);border-color:var(--red);box-shadow:0 0 30px rgba(248,113,113,.35)}
+
+  .bigcheck{width:110px;height:110px}
+  .bigcheck circle{fill:none;stroke:var(--green);stroke-width:5;stroke-dasharray:290;stroke-dashoffset:290;
+    animation:draw 0.7s .1s forwards cubic-bezier(.65,0,.35,1)}
+  .bigcheck path{fill:none;stroke:var(--green);stroke-width:7;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:60;stroke-dashoffset:60;animation:draw .45s .7s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .centre-col{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
+  .centre-col h2{font-size:24px;font-weight:900;letter-spacing:.5px}
+  .centre-col p{font-size:13px;color:var(--dim);max-width:420px;line-height:1.6}
+
+  /* ---------- road / truck ---------- */
+  .roadwrap{width:min(640px,94%);display:flex;flex-direction:column;gap:14px}
+  .road{position:relative;height:150px;border-radius:16px;overflow:hidden;
+    background:linear-gradient(180deg,#131a29,#0b1120);border:1px solid var(--line)}
+  .road::before{content:"";position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;
+    background:repeating-linear-gradient(90deg,rgba(255,255,255,.5) 0 26px,transparent 26px 52px);
+    animation:dash 0.7s linear infinite;opacity:.55}
+  @keyframes dash{to{background-position-x:-52px}}
+  .truck{position:absolute;top:34px;left:6%;width:120px;transition:left 3.4s cubic-bezier(.45,.05,.35,1);
+    filter:drop-shadow(0 12px 14px rgba(0,0,0,.5))}
+  .house-d{position:absolute;right:5%;top:26px;width:64px;text-align:center;font-size:9.5px;color:var(--dim);
+    font-weight:700;letter-spacing:.5px}
+  .eta-chip{position:absolute;left:12px;top:12px;font-size:10.5px;font-weight:800;letter-spacing:.8px;
+    color:#04120d;background:linear-gradient(135deg,#5eead4,#10b981);padding:6px 11px;border-radius:999px;
+    box-shadow:0 4px 14px rgba(16,185,129,.4);animation:pop .4s}
+  .miniphone{align-self:center;width:270px;border-radius:18px;background:#0b141a;border:1px solid rgba(255,255,255,.14);
+    padding:10px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+
+  /* ---------- dispatch drivers ---------- */
+  .drivers{display:flex;flex-direction:column;gap:12px;width:min(600px,94%)}
+  .jobcard{border:1px solid rgba(251,191,36,.45);border-radius:14px;padding:12px 16px;
+    background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(251,191,36,.03));animation:hotp 1.2s infinite}
+  .jobcard b{font-size:13px}.jobcard span{display:block;font-size:11px;color:var(--dim);margin-top:3px}
+  .drow{display:flex;gap:10px}
+  .dcard{flex:1;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;
+    background:rgba(255,255,255,.03);transition:.35s;position:relative}
+  .dcard b{display:block;font-size:13px}.dcard span{font-size:10px;color:var(--dim);display:block;margin-top:3px}
+  .dcard .veh{font-size:9px;font-weight:800;letter-spacing:.6px;color:var(--blue);margin-top:6px;
+    border:1px solid rgba(96,165,250,.35);display:inline-block;padding:3px 8px;border-radius:6px}
+  .dcard.won{border-color:var(--green);background:rgba(16,185,129,.13);transform:scale(1.05);
+    box-shadow:0 8px 26px rgba(16,185,129,.3)}
+  .dcard.lost{opacity:.35;filter:grayscale(1)}
+  .dcard .res{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:900;
+    letter-spacing:1px;padding:3px 10px;border-radius:999px;background:var(--green);color:#04120d;animation:pop .4s}
+
+  /* ---------- cutting ---------- */
+  .cutwrap{width:min(560px,92%);text-align:center;display:flex;flex-direction:column;gap:16px;align-items:center}
+  .timer{font-size:52px;font-weight:900;letter-spacing:2px;font-variant-numeric:tabular-nums;
+    background:linear-gradient(90deg,#5eead4,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .bar{width:100%;height:12px;border-radius:8px;background:rgba(255,255,255,.07);overflow:hidden;
+    border:1px solid var(--line)}
+  .bar i{display:block;height:100%;width:0;border-radius:8px;
+    background:linear-gradient(90deg,#10b981,#5eead4,#fbbf24);box-shadow:0 0 14px rgba(45,212,167,.6);
+    transition:width .15s linear}
+  .cutgrid{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .cutchip{font-size:10.5px;font-weight:700;color:#c7d2e0;border:1px solid var(--line);border-radius:8px;
+    padding:7px 11px;background:rgba(255,255,255,.03)}
+
+  /* ---------- OTP ---------- */
+  .otp{display:flex;gap:10px;justify-content:center}
+  .otp b{width:52px;height:62px;display:grid;place-items:center;font-size:26px;font-weight:900;
+    border:2px solid rgba(255,255,255,.16);border-radius:12px;color:#fff;background:rgba(255,255,255,.04);
+    transition:.2s}
+  .otp b.on{border-color:var(--green);color:var(--green);box-shadow:0 0 18px rgba(45,212,167,.35);
+    animation:pop .3s}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8}
+  .flash.go{animation:flash .5s}
+  @keyframes flash{15%{opacity:.85}100%{opacity:0}}
+
+  .cf{position:absolute;top:-24px;width:8px;height:15px;border-radius:2px;z-index:10;
+    animation:cfall linear forwards}
+  @keyframes cfall{to{transform:translateY(560px) rotate(720deg);opacity:.7}}
+
+  .ring{width:64px;height:64px;border-radius:50%;border:3px solid rgba(248,113,113,.2);
+    border-top-color:var(--red);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .shake{animation:shake .5s 3}
+  @keyframes shake{25%{transform:translateX(-4px) rotate(-2deg)}75%{transform:translateX(4px) rotate(2deg)}}
+
+  /* ---------- batch map ---------- */
+  .mapwrap{width:min(720px,96%);display:flex;gap:16px;align-items:stretch}
+  .mapbox{flex:1;position:relative;border:1px solid var(--line);border-radius:18px;min-height:300px;
+    background:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.4px);background-size:22px 22px;
+    overflow:hidden}
+  .mapbox svg{position:absolute;inset:0;width:100%;height:100%}
+  .pin{position:absolute;transform:translate(-50%,-100%);text-align:center;z-index:3}
+  .pin .pl{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--dim);margin-top:2px}
+  .pin svg{width:34px;height:34px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+  .pin .pk{position:absolute;top:-14px;left:50%;transform:translateX(-50%) scale(0);width:18px;height:18px;
+    border-radius:50%;background:var(--green);color:#04120d;font-size:11px;font-weight:900;
+    display:grid;place-items:center}
+  .pin.hit .pk{animation:pop .4s forwards}
+  .stats{width:210px;flex:none;display:flex;flex-direction:column;gap:10px}
+  .stat{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.03)}
+  .stat b{font-size:22px;font-weight:900;display:block;font-variant-numeric:tabular-nums}
+  .stat span{font-size:9.5px;letter-spacing:1px;color:var(--dim);font-weight:800}
+  .stat.g b{color:var(--green)} .stat.a b{color:var(--amber)}
+
+  .hero{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;padding:20px}
+  .hero h2{font-size:30px;font-weight:900;letter-spacing:.5px;
+    background:linear-gradient(90deg,#5eead4,#fff,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{color:var(--dim);font-size:13.5px;max-width:460px;line-height:1.7}
+  .hero .hint{font-size:11px;letter-spacing:1.5px;color:var(--amber);font-weight:800;animation:tkpulse 1.6s infinite}
+
+  @media (max-width:980px){.ticket{display:none}.stage{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<header>
+  <div class="brand">
+    <div class="mark">HDS</div>
+    <div>
+      <h1>HDS <em>Local Delivery</em> — End-to-End</h1>
+      <p>WhatsApp order &nbsp;·&nbsp; branch cutting &nbsp;·&nbsp; driver network &nbsp;·&nbsp; doorstep</p>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="pills" id="pills"></div>
+    <button class="play" id="playBtn">&#9654;&nbsp; Play</button>
+  </div>
+</header>
+
+<main>
+  <section class="track" id="track">
+    <div class="line"></div>
+    <div class="fill" id="fill"></div>
+    <div class="stations" id="stations"></div>
+    <div class="orb" id="orb"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2zm0 2.3L6 7.6v6.8l6 3.3 6-3.3V7.6l-6-3.3z"/></svg></div>
+  </section>
+
+  <section class="stage">
+    <div class="scene" id="scene"></div>
+    <aside class="ticket">
+      <h3>ORDER STATE</h3>
+      <ul id="ticketList"></ul>
+      <div class="tot" id="ticketTot"></div>
+    </aside>
+  </section>
+
+  <div class="narr">
+    <span id="narrText">Pick a scenario, then press Play.</span>
+    <span class="stepc" id="stepc"></span>
+  </div>
+</main>
+
+<script>
+/* ================= engine ================= */
+const $=s=>document.querySelector(s);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+let runToken=0;
+const dead=t=>t!==runToken;
+
+const ICONS={
+  chat:'<path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>',
+  bot:'<path d="M12 1.5a1 1 0 0 1 1 1V5h4a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h4V2.5a1 1 0 0 1 1-1z"/><circle cx="9" cy="12" r="1.4" fill="#0a0f1a"/><circle cx="15" cy="12" r="1.4" fill="#0a0f1a"/>',
+  card:'<path d="M21 4H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1z"/><rect x="2" y="8.5" width="20" height="3" fill="#0a0f1a"/>',
+  store:'<path d="M3.5 9L5.3 3h13.4L20.5 9v1.6a2.6 2.6 0 0 1-5.2 0 2.6 2.6 0 0 1-5.2 0 2.6 2.6 0 0 1-5.2 0A2.6 2.6 0 0 1 3.5 9z"/><path d="M5 13.2V21h4.5v-5h5v5H19v-7.8a4 4 0 0 1-2-.5V21h2v1H3v-8.3a4 4 0 0 0 2-.5z"/>',
+  saw:'<circle cx="12" cy="10" r="6.5"/><circle cx="12" cy="10" r="2.2" fill="#0a0f1a"/><path d="M4 20h16v-3H4z"/>',
+  disp:'<circle cx="12" cy="12" r="2.2"/><path d="M12 4a8 8 0 0 1 8 8h-2.2A5.8 5.8 0 0 0 12 6.2z"/><path d="M12 20a8 8 0 0 1-8-8h2.2A5.8 5.8 0 0 0 12 17.8z"/>',
+  truck:'<path d="M1 6h12v9H1z"/><path d="M13 9h5.5L22 12.5V15h-9z"/><circle cx="5" cy="17" r="2.4"/><circle cx="17.5" cy="17" r="2.4"/>',
+  home:'<path d="M12 3l9.5 8h-3v9h-4.5v-6h-4v6H5.5v-9h-3z"/>'
+};
+const STATIONS=[['chat','WhatsApp'],['bot','William AI'],['card','Payment'],['store','Branch'],['saw','Cutting'],['disp','Dispatch'],['truck','Driver'],['home','Doorstep']];
+
+const stationsEl=$('#stations');
+STATIONS.forEach(([ic,lb],i)=>{
+  const d=document.createElement('div');d.className='st';d.dataset.i=i;
+  d.innerHTML=`<div class="st-ic"><svg viewBox="0 0 24 24" fill="currentColor">${ICONS[ic]}</svg></div><div class="st-lb">${lb}</div>`;
+  stationsEl.appendChild(d);
+});
+const stEls=[...stationsEl.children];
+
+const track=$('#track'),orb=$('#orb'),fill=$('#fill');
+const completed=new Set();
+let orbAt=0;
+function orbX(i){const tr=track.getBoundingClientRect(),r=stEls[i].getBoundingClientRect();return r.left-tr.left+r.width/2;}
+function lineX(){return orbX(0);}
+async function moveOrb(i){
+  orbAt=i;orb.classList.add('go');
+  orb.style.left=orbX(i)+'px';
+  fill.style.width=Math.max(0,orbX(i)-lineX())+'px';
+  stEls.forEach((el,j)=>{el.classList.toggle('active',j===i);if(j===i)completed.add(j);el.classList.toggle('done',completed.has(j)&&j!==i);});
+  await sleep(1050);
+}
+window.addEventListener('resize',()=>{orb.style.left=orbX(orbAt)+'px';fill.style.width=Math.max(0,orbX(orbAt)-lineX())+'px';});
+
+const scene=$('#scene'),narr=$('#narrText'),stepc=$('#stepc'),tlist=$('#ticketList'),ttot=$('#ticketTot');
+function setNarr(t){narr.classList.add('fade');setTimeout(()=>{narr.textContent=t;narr.classList.remove('fade');},220);}
+function renderTicket(states){tlist.innerHTML='';states.forEach(s=>{const li=document.createElement('li');li.className='tk';li.innerHTML=`<span class="dot">✓</span>${s}`;tlist.appendChild(li);});}
+function setTicket(idx){[...tlist.children].forEach((li,i)=>{li.classList.toggle('done',i<idx);li.classList.toggle('now',i===idx);});}
+function confetti(){for(let i=0;i<70;i++){const c=document.createElement('i');c.className='cf';
+  c.style.left=Math.random()*100+'%';c.style.background=['#2dd4a7','#fbbf24','#60a5fa','#f472b6','#e9edf6'][i%5];
+  c.style.animationDelay=(Math.random()*.5)+'s';c.style.animationDuration=(1.1+Math.random()*1.3)+'s';
+  c.style.transform=`rotate(${Math.random()*360}deg)`;scene.appendChild(c);}
+  setTimeout(()=>scene.querySelectorAll('.cf').forEach(e=>e.remove()),3200);}
+
+/* ================= shared bits ================= */
+function phoneHTML(head='William',sub='HDS Sales · online'){return `<div class="phone"><div class="wa-head"><div class="wa-av">W</div><div><b>${head}</b><span>${sub}</span></div></div><div class="wa-body"></div><div class="wa-in">Message</div></div>`;}
+async function bubble(body,m,d){
+  if(m.from==='bot'){const tp=document.createElement('div');tp.className='bub bot typing';tp.innerHTML='<i></i><i></i><i></i>';body.appendChild(tp);body.scrollTop=1e5;await sleep(m.think??700);tp.remove();}
+  if(d())return;
+  const b=document.createElement('div');b.className='bub '+(m.from||'bot');b.innerHTML=(m.html||esc(m.t))+(m.time?'<span class="t">'+m.time+'</span>':'');
+  body.appendChild(b);body.scrollTop=1e5;await sleep(m.gap??680);
+}
+async function chatScene(r,d,msgs){r.innerHTML=phoneHTML();const body=r.querySelector('.wa-body');for(const m of msgs){await bubble(body,m,d);if(d())return;}}
+
+const QUOTE_CARD=`<div class="qc"><b>HDS QUOTE #4821</b>
+ <div class="qr"><span>18 × White Melamine 2750×1830</span><span>R3,780</span></div>
+ <div class="qr"><span>Cut + edge (carcass)</span><span>R159</span></div>
+ <div class="qr"><span>Delivery → Daveyton · 14 km</span><span>R310</span></div>
+ <div class="qt"><span>Total</span><span>R4,249</span></div></div>`;
+
+/* ================= scenes ================= */
+async function scAsk(r,d){await chatScene(r,d,[
+  {from:'cust',t:'Hi William 👋 do you guys deliver to Daveyton?',time:'09:41'},
+  {from:'bot',html:'Hi! Yes — <b>HDS Local Delivery</b> covers Daveyton from our Secunda branch 🚚<br>14 km → <b>R310</b> flat rate',time:'09:41'},
+  {from:'cust',t:'Nice. I need 18 white melamine sheets cut for a kitchen',time:'09:42'},
+]);}
+async function scQuote(r,d){await chatScene(r,d,[
+  {from:'bot',html:'Done — here\'s everything in one quote:'+QUOTE_CARD,time:'09:42',think:900},
+  {from:'cust',html:'Approved ✅',time:'09:43'},
+]);}
+async function scPayLink(r,d){await chatScene(r,d,[
+  {from:'bot',html:'Great! Secure payment link 👇<span class="paybtn">PAY R4,249 · PayFast</span>',time:'09:43'},
+  {from:'sys',t:'Payment confirmed · ref #4821',gap:400},
+]);
+ if(d())return;
+ const s=document.createElement('div');s.className='stamp ok';s.innerHTML='<i>PAYMENT RECEIVED</i>';r.appendChild(s);await sleep(900);}
+async function scPayStore(r,d){
+  r.innerHTML=`<div class="duo"><div class="panel">
+    <div class="p-head"><b>HDS Secunda · Till</b><span class="p-tag">IN-STORE ORDER</span></div>
+    <div style="padding:10px 0 4px">
+      <div class="fld"><span>Customer</span><b id="f1"></b></div>
+      <div class="fld"><span>WhatsApp number</span><b id="f2"></b></div>
+      <div class="fld"><span>Deliver to</span><b id="f3"></b></div>
+      <div class="fld"><span>Load</span><b>18 sheets · Class B2 (trailer)</b></div>
+      <div class="fld"><span>Delivery fee</span><b style="color:var(--green)">R310 · 14 km</b></div>
+    </div>
+    <button class="act amber" id="paidBtn">MARK PAID · R4,249 CASH</button>
+    <div class="p-foot">48 h cutting clock starts now — from payment, not quote</div>
+  </div>
+  <div id="mp"></div></div>`;
+  const type=async(id,txt)=>{const e=r.querySelector(id);for(let i=1;i<=txt.length;i++){e.innerHTML=esc(txt.slice(0,i))+'<span class="cursor">|</span>';await sleep(34);}e.innerHTML='<b>'+esc(txt)+'</b>';};
+  await type('#f1','Thabo Mokoena');if(d())return;
+  await type('#f2','082 555 0143');if(d())return;
+  await type('#f3','Daveyton · pin via WhatsApp');if(d())return;
+  await sleep(350);const b=r.querySelector('#paidBtn');b.classList.add('press');await sleep(320);
+  const mp=r.querySelector('#mp');mp.innerHTML=`<div class="miniphone"><div class="wa-body" style="min-height:120px"></div></div>`;
+  const body=mp.querySelector('.wa-body');
+  await bubble(body,{from:'bot',html:'Hi Thabo — payment received at <b>HDS Secunda</b> ✅<br>Order #4821 booked for delivery. Drop your pin 📍',think:500,gap:300},d);
+}
+async function scBranch(r,d){
+  r.innerHTML=`<div class="panel"><div class="p-head"><b>HDS Secunda · Order Queue</b><span class="p-tag">BRANCH DASHBOARD</span></div>
+  <div class="rows">
+    <div class="orow"><span class="oid">#4817</span><span>12 sheets · collect</span><span class="sp"></span><span class="tag ok">READY</span></div>
+    <div class="orow" id="newrow" style="display:none"><span class="oid">#4821</span><span>18 sheets · cut+edge · <b>DELIVERY → Daveyton</b></span><span class="sp"></span><span class="tag warn">NEW ORDER</span></div>
+    <div class="orow"><span class="oid">#4822</span><span>6 sheets · collect</span><span class="sp"></span><span class="tag info">CUTTING</span></div>
+  </div>
+  <button class="act" id="accBtn" style="display:none">ACCEPT ORDER #4821</button>
+  <div class="p-foot" id="bfoot">Alert must be acknowledged — else it escalates to the branch manager</div></div>`;
+  await sleep(500);const row=r.querySelector('#newrow');row.style.display='flex';row.classList.add('hot');await sleep(900);
+  if(d())return;const btn=r.querySelector('#accBtn');btn.style.display='block';await sleep(700);
+  btn.classList.add('press');await sleep(300);btn.style.display='none';
+  row.classList.remove('hot');row.querySelector('.tag').className='tag info';row.querySelector('.tag').textContent='ACCEPTED · CUTTING QUEUED';
+  r.querySelector('#bfoot').textContent='Sipho (supervisor) accepted · est. ready Thursday · customer notified';
+  await sleep(900);
+}
+async function scCutting(r,d){
+  r.innerHTML=`<div class="cutwrap">
+    <svg width="70" height="70" viewBox="0 0 24 24" fill="#5eead4"><circle cx="12" cy="10" r="6.5"/><circle cx="12" cy="10" r="2.2" fill="#070a12"/><path d="M4 20h16v-3H4z"/></svg>
+    <div class="timer" id="tm">47:59</div>
+    <div class="bar"><i id="cb"></i></div>
+    <div class="cutgrid"><span class="cutchip">18 sheets · cut to size</span><span class="cutchip">240 m edging · 0.4mm L1</span><span class="cutchip">flat-packed + strapped</span></div>
+    <p style="font-size:12px;color:var(--dim)">Cutting window runs from <b style="color:#fff">payment</b> — never assumed ready</p>
+  </div>`;
+  const tm=r.querySelector('#tm'),cb=r.querySelector('#cb');
+  let t=47*60+59;const total=t;
+  while(t>0){if(d())return;const h=String(Math.floor(t/60)).padStart(2,'0'),m=String(t%60).padStart(2,'0');
+    tm.textContent=h+':'+m;cb.style.width=(100*(1-t/total))+'%';t-=Math.ceil(total/46);await sleep(70);}
+  tm.textContent='00:00';cb.style.width='100%';
+}
+async function scReady(r,d){
+  r.innerHTML=`<div class="panel"><div class="p-head"><b>HDS Secunda · Order Queue</b><span class="p-tag">BRANCH DASHBOARD</span></div>
+  <div class="rows">
+    <div class="orow hot" id="rrow"><span class="oid">#4821</span><span>18 sheets · packed & strapped · 3 packs</span><span class="sp"></span><span class="tag info">AWAITING READY</span></div>
+  </div>
+  <button class="act" id="rdy">MARK READY FOR COLLECTION</button>
+  <div class="p-foot">Physical confirmation only — dispatch never guesses</div></div>`;
+  await sleep(800);const btn=r.querySelector('#rdy');btn.classList.add('press');await sleep(350);
+  if(d())return;btn.style.display='none';const row=r.querySelector('#rrow');row.classList.remove('hot');
+  row.querySelector('.tag').className='tag ok';row.querySelector('.tag').textContent='READY ✓';await sleep(900);
+}
+async function scSlot(r,d){await chatScene(r,d,[
+  {from:'bot',html:'Good news — order <b>#4821</b> is ready! 🎉<br>Pick a delivery slot:<br><span class="chip">Tomorrow AM · 8–12</span><span class="chip">Tomorrow PM · 1–5</span>',think:850},
+  {from:'cust',html:'Afternoon please 🙌',time:'16:02'},
+  {from:'bot',html:'Booked ✅ <b>Tomorrow 1–5 pm.</b><br>Someone must be on-site — your delivery OTP is <b>4821</b>',think:800},
+]);}
+async function scDispatch(r,d,batch){
+  r.innerHTML=`<div class="drivers">
+    <div class="jobcard"><b>📦 NEW JOB ${batch?'— BATCH ×3 DROPS':''}</b><span>${batch?'Secunda → Daveyton run · 3 drops · 62 km total · pays R950':'Secunda → Daveyton · 18 sheets · 14 km · pays R310 · ready now'}</span></div>
+    <div class="drow">
+      <div class="dcard" id="d1"><b>Sipho N.</b><span>B2 · bakkie + trailer</span><span class="veh">ZONE: DAVEYTON</span></div>
+      <div class="dcard" id="d2"><b>Musa K.</b><span>T1 · 1.5t dropside</span><span class="veh">ZONE: ETWATWA</span></div>
+      <div class="dcard" id="d3"><b>Johan v.d.</b><span>B1 · bakkie</span><span class="veh">ZONE: BENONI</span></div>
+    </div>
+    <p style="font-size:11px;color:var(--dim);text-align:center">Offer pushed to vetted drivers on WhatsApp · first accept wins · rotation logged for fairness</p>
+  </div>`;
+  await sleep(1400);if(d())return;
+  const w=r.querySelector('#d1');w.classList.add('won');w.insertAdjacentHTML('beforeend','<span class="res">ACCEPTED ✓</span>');
+  r.querySelector('#d2').classList.add('lost');r.querySelector('#d3').classList.add('lost');await sleep(1100);
+}
+async function scEnroute(r,d,msg){
+  r.innerHTML=`<div class="roadwrap">
+    <div class="road"><span class="eta-chip">EN ROUTE · ETA 15 MIN</span>
+      <svg class="truck" id="tk" viewBox="0 0 120 60"><rect x="4" y="8" width="64" height="32" rx="4" fill="#e8edf7"/><rect x="9" y="13" width="54" height="9" rx="2" fill="#0e7c66"/><path d="M68 16h22l16 15v9H68z" fill="#2dd4a7"/><rect x="94" y="20" width="10" height="10" rx="1.5" fill="#0a0f1a"/><circle cx="24" cy="44" r="8" fill="#111827" stroke="#3b475c" stroke-width="3"/><circle cx="50" cy="44" r="8" fill="#111827" stroke="#3b475c" stroke-width="3"/><circle cx="92" cy="44" r="8" fill="#111827" stroke="#3b475c" stroke-width="3"/></svg>
+      <div class="house-d"><svg viewBox="0 0 24 24" width="42" height="42" fill="#8b95ab"><path d="M12 3l9.5 8h-3v9h-4.5v-6h-4v6H5.5v-9h-3z"/></svg>DELIVERY PIN<br>Daveyton</div>
+    </div>
+    <div class="miniphone"><div class="wa-body" style="min-height:88px" id="eb"></div></div>
+  </div>`;
+  await sleep(300);const tk=r.querySelector('#tk');tk.style.left='62%';
+  const body=r.querySelector('#eb');
+  await bubble(body,{from:'bot',html:msg||'🚚 <b>Sipho</b> has collected your order — he\'s ~15 min away. Have OTP <b>4821</b> ready.',think:500,gap:200},d);
+  await sleep(3200);
+}
+async function scDelivered(r,d,label){
+  r.innerHTML=`<div class="centre-col" style="position:relative;z-index:2">
+    <div class="otp"><b>4</b><b>8</b><b>2</b><b>1</b></div>
+    <p style="font-size:12.5px;color:var(--dim)">Customer reads OTP to driver · photo POD uploaded</p>
+    <div id="donewrap" style="display:none;flex-direction:column;align-items:center;gap:10px">
+      <svg class="bigcheck" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45"/><path d="M32 52l12 12 24-26"/></svg>
+      <h2 style="color:var(--green)">${label||'DELIVERED'}</h2>
+      <p>OTP verified · photo stored on order #4821 · Sipho's payout queued for Friday</p>
+    </div></div><div class="flash" id="fl"></div>`;
+  const boxes=[...r.querySelectorAll('.otp b')];
+  for(const b of boxes){await sleep(420);if(d())return;b.classList.add('on');}
+  await sleep(400);r.querySelector('#fl').classList.add('go');await sleep(500);
+  if(d())return;
+  r.querySelector('.otp').style.display='none';r.querySelector('.centre-col p').style.display='none';
+  r.querySelector('#donewrap').style.display='flex';confetti();await sleep(1600);
+}
+async function scFailed(r,d){
+  r.innerHTML=`<div class="centre-col">
+    <svg class="shake" width="80" height="80" viewBox="0 0 24 24" fill="#f87171"><path d="M12 3l9.5 8h-3v9h-4.5v-6h-4v6H5.5v-9h-3z"/></svg>
+    <h2 style="color:var(--red)">NO ANSWER AT THE GATE</h2>
+    <p>Driver waited 12 min · called twice · gate locked.<br>William is rebooking with the customer now…</p>
+    <div class="miniphone" style="width:300px"><div class="wa-body" style="min-height:130px" id="fb"></div></div>
+  </div>`;
+  const s=document.createElement('div');s.className='stamp bad';s.innerHTML='<i>ATTEMPT FAILED</i>';r.appendChild(s);
+  const body=r.querySelector('#fb');await sleep(1200);if(d())return;s.remove();
+  await bubble(body,{from:'bot',html:'We missed you today 😕 rebook for <b>tomorrow AM</b>?',think:600,gap:400},d);
+  await bubble(body,{from:'cust',html:'Yes — sorry! Tomorrow morning works 👍',gap:300},d);
+  await bubble(body,{from:'sys',t:'Rebooked · AM slot · redelivery covered by delivery fund',gap:400},d);
+  await sleep(600);
+}
+async function scBatchReady(r,d){
+  r.innerHTML=`<div class="panel"><div class="p-head"><b>HDS Secunda · Order Queue</b><span class="p-tag">SMART DISPATCH</span></div>
+  <div class="rows" id="brows"></div>
+  <button class="act amber" id="bb" style="display:none">POST AS ONE BATCH — 3 DROPS · R950</button>
+  <div class="p-foot">Same direction → batch them. Driver earns more per km, customers pay the same flat rate.</div></div>`;
+  const rows=r.querySelector('#brows');
+  const list=[['#4821','8 sheets','Daveyton · 8 km','R249'],['#4830','flatpack kitchen','Daveyton · 13 km','R349'],['#4831','22 sheets','Etwatwa · 18 km','R449']];
+  for(const [id,load,dest,fee] of list){
+    const row=document.createElement('div');row.className='orow';
+    row.innerHTML=`<span class="oid">${id}</span><span>${load} · <b>${dest}</b></span><span class="sp"></span><span class="tag ok">READY</span><span class="tag info">${fee}</span>`;
+    rows.appendChild(row);await sleep(500);if(d())return;}
+  const btn=r.querySelector('#bb');btn.style.display='block';await sleep(800);btn.classList.add('press');
+  await sleep(400);btn.textContent='BATCH POSTED ✓';await sleep(700);
+}
+async function scBatchMap(r,d){
+  r.innerHTML=`<div class="mapwrap"><div class="mapbox">
+    <svg viewBox="0 0 640 320" preserveAspectRatio="none">
+      <path id="rp" d="M70,262 C140,262 150,108 252,98 S330,250 425,212 S545,92 575,80" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="3" stroke-dasharray="5 9"/>
+      <path id="rp2" fill="none" stroke="#2dd4a7" stroke-width="4" stroke-linecap="round"/>
+      <circle id="dot" r="9" fill="#2dd4a7" style="filter:drop-shadow(0 0 8px #2dd4a7)"/>
+    </svg>
+    <div class="pin" id="hq"><svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M3.5 9L5.3 3h13.4L20.5 9v1.6a2.6 2.6 0 0 1-5.2 0 2.6 2.6 0 0 1-5.2 0 2.6 2.6 0 0 1-5.2 0A2.6 2.6 0 0 1 3.5 9zM5 13.2V21h14v-7.8"/></svg><div class="pl">HDS SECUNDA</div></div>
+  </div>
+  <div class="stats">
+    <div class="stat g"><b id="s1">0</b><span>DELIVERIES · 1 ROUTE</span></div>
+    <div class="stat"><b id="s2">0 km</b><span>TOTAL DRIVEN</span></div>
+    <div class="stat"><b id="s3">R0</b><span>DELIVERY REVENUE</span></div>
+    <div class="stat a"><b id="s4">R0</b><span>DRIVER EARNS</span></div>
+  </div></div>`;
+  const path=r.querySelector('#rp'),p2=r.querySelector('#rp2'),dot=r.querySelector('#dot');
+  p2.setAttribute('d',path.getAttribute('d'));
+  const L=path.getTotalLength();p2.style.strokeDasharray=L;p2.style.strokeDashoffset=L;
+  const stops=[0.30,0.58,0.90];const box=r.querySelector('.mapbox');
+  // HQ pin at path start
+  const p0=path.getPointAtLength(0);const hq=r.querySelector('#hq');
+  hq.style.left=(p0.x/640*100)+'%';hq.style.top=(p0.y/320*100)+'%';
+  const pins=stops.map((t,i)=>{const p=path.getPointAtLength(L*t);const el=document.createElement('div');el.className='pin';
+    el.style.left=(p.x/640*100)+'%';el.style.top=(p.y/320*100)+'%';
+    el.innerHTML=`<span class="pk">✓</span><svg viewBox="0 0 24 24" fill="#60a5fa"><path d="M12 3l9.5 8h-3v9h-4.5v-6h-4v6H5.5v-9h-3z"/></svg><div class="pl">DROP ${i+1}</div>`;
+    box.appendChild(el);return {t,el,done:false};});
+  const t0=performance.now(),DUR=5200;let si=0;
+  while(true){if(d())return;const e=(performance.now()-t0)/DUR;const prog=Math.min(1,e);
+    const len=L*prog;const pt=path.getPointAtLength(len);
+    dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);p2.style.strokeDashoffset=L-len;
+    if(si<pins.length&&prog>=pins[si].t){pins[si].el.classList.add('hit');si++;}
+    if(prog>=1)break;await sleep(30);}
+  // counters
+  const count=(id,to,fmt)=>{const el=r.querySelector(id);const s=performance.now();
+    const tick=()=>{if(dead(runToken))return;const k=Math.min(1,(performance.now()-s)/1400);el.textContent=fmt(Math.round(to*(1-Math.pow(1-k,3))));if(k<1)requestAnimationFrame(tick);};tick();};
+  count('#s1',3,v=>v);count('#s2',62,v=>v+' km');count('#s3',1047,v=>'R'+v.toLocaleString());count('#s4',950,v=>'R'+v.toLocaleString());
+  await sleep(1700);confetti();await sleep(1200);
+}
+
+/* ================= scenarios ================= */
+function baseSteps(fromStore){
+  const steps=[
+    {st:0,text:'Customer messages William on WhatsApp — "do you deliver to Daveyton?"',scene:scAsk},
+    {st:1,text:'William quotes instantly — boards, cutting AND delivery in one quote',scene:scQuote,ticket:0},
+  ];
+  if(fromStore){
+    steps.push({st:2,text:'Customer chooses to pay in-branch — the till registers the delivery order',scene:async(r,d)=>{await chatScene(r,d,[{from:'cust',html:'Approved ✅ but I\'ll pay at the Secunda branch tomorrow',time:'09:43'},{from:'bot',html:'No problem — pay at the Secunda till, ref <b>#4821</b>. Your 48h starts when payment is captured.',think:700}]);},ticket:0});
+    steps.push({st:3,text:'Till staff capture the order — phone number links the WhatsApp thread, fee auto-rated',scene:scPayStore,ticket:1});
+    steps.push({st:3,text:'Order pings the branch queue — a supervisor accepts and owns it',scene:scBranch,ticket:2});
+  }else{
+    steps.push({st:2,text:'Customer pays the PayFast link — PAID marks itself via webhook',scene:scPayLink,ticket:1});
+    steps.push({st:3,text:'Paid order pings the branch queue — a supervisor accepts and owns it',scene:scBranch,ticket:2});
+  }
+  steps.push(
+    {st:4,text:'48h cutting window — runs from payment time, never from the quote',scene:scCutting,ticket:2},
+    {st:3,text:'Supervisor physically confirms the load is packed → MARK READY',scene:scReady,ticket:3},
+    {st:0,text:'William locks a delivery slot with the customer BEFORE posting to drivers',scene:scSlot,ticket:4},
+    {st:5,text:'Job pushes to vetted zone drivers on WhatsApp — first accept wins',scene:(r,d)=>scDispatch(r,d,false),ticket:5},
+    {st:6,text:'Sipho collects (collection code + loaded-vehicle photo) — customer gets the ETA',scene:(r,d)=>scEnroute(r,d),ticket:6},
+    {st:7,text:'OTP + photo POD → DELIVERED. Driver payout queued automatically',scene:(r,d)=>scDelivered(r,d),ticket:7},
+  );
+  return steps;
+}
+
+const SCEN={
+  online:{label:'1 · Online payment',desc:'WhatsApp order → pays online → cut → delivered',
+    ticket:['QUOTE APPROVED','PAID','IN PRODUCTION','READY','SCHEDULED','DISPATCHED','EN ROUTE','DELIVERED'],
+    tot:'Order #4821 · R4,249 · delivery R310 → driver R280 · fund R30',
+    steps:baseSteps(false)},
+  store:{label:'2 · In-store payment',desc:'WhatsApp quote → pays at the till → delivered',
+    ticket:['QUOTE APPROVED','PAID (IN-STORE)','IN PRODUCTION','READY','SCHEDULED','DISPATCHED','EN ROUTE','DELIVERED'],
+    tot:'Order #4821 · paid at till · 48h clock starts at capture',
+    steps:baseSteps(true)},
+  fail:{label:'3 · Customer not home',desc:'Attempt fails → AI rebooks → delivered next day',
+    ticket:['QUOTE APPROVED','PAID','IN PRODUCTION','READY','SCHEDULED','DISPATCHED','EN ROUTE','ATTEMPT FAILED','RESCHEDULED','EN ROUTE (RETRY)','DELIVERED'],
+    tot:'Failed attempt absorbed by the delivery fund',
+    steps:[...baseSteps(false).slice(0,8),
+      {st:7,text:'Gate locked, no answer — the attempt is marked FAILED, not hidden',scene:scFailed,ticket:7},
+      {st:0,text:'William rebooks the slot on the spot — covered by the delivery fund',scene:async(r,d)=>{await chatScene(r,d,[{from:'bot',html:'Locked in ✅ <b>Tomorrow 8–12.</b> Sipho will call when he\'s 15 min out.',think:700}]);},ticket:8},
+      {st:6,text:'Next morning — the retry goes out on the first run',scene:(r,d)=>scEnroute(r,d,'🚚 Retry run — <b>Sipho</b> is ~15 min away. OTP <b>4821</b>.'),ticket:9},
+      {st:7,text:'OTP + photo POD → DELIVERED on the second attempt',scene:(r,d)=>scDelivered(r,d,'DELIVERED · 2ND ATTEMPT'),ticket:10},
+    ]},
+  batch:{label:'4 · Batched route',desc:'3 ready orders → one driver, one route → the real economics',
+    ticket:['3 × ORDERS READY','SLOTS CONFIRMED','BATCH POSTED','ACCEPTED','EN ROUTE — 3 DROPS','DELIVERED ×3'],
+    tot:'3 deliveries · 62 km · R1,047 collected · driver keeps ~R950',
+    steps:[
+      {st:4,text:'Three orders land in READY within the same window — all heading east',scene:scBatchReady,ticket:0},
+      {st:0,text:'All three customers confirmed PM slots on WhatsApp',scene:async(r,d)=>{await chatScene(r,d,[{from:'sys',t:'#4821 → PM slot ✓'},{from:'sys',t:'#4830 → PM slot ✓'},{from:'sys',t:'#4831 → PM slot ✓'},{from:'bot',html:'All 3 deliveries confirmed for <b>this afternoon</b> ✅',think:600}]);},ticket:1},
+      {st:5,text:'Dispatch posts them as ONE batch — 3 drops, R950 to the driver',scene:(r,d)=>scDispatch(r,d,true),ticket:2},
+      {st:6,text:'Sipho takes the lot — one route instead of three return trips',scene:(r,d)=>scBatchMap(r,d),ticket:5},
+    ]},
+};
+
+/* ================= runner ================= */
+const pillsEl=$('#pills');let current='online';
+Object.entries(SCEN).forEach(([k,s])=>{
+  const p=document.createElement('button');p.className='pill';p.dataset.k=k;p.textContent=s.label;
+  p.onclick=()=>select(k,true);pillsEl.appendChild(p);});
+function select(k,autoplay){
+  current=k;runToken++;completed.clear();
+  [...pillsEl.children].forEach(p=>p.classList.toggle('on',p.dataset.k===k));
+  stEls.forEach(el=>el.classList.remove('done','active'));
+  fill.style.width='0px';orb.classList.remove('go');
+  renderTicket(SCEN[k].ticket);ttot.textContent=SCEN[k].tot;
+  setNarr(SCEN[k].desc);stepc.textContent='';
+  scene.innerHTML=`<div class="hero"><h2>${SCEN[k].desc}</h2><p>The order travels the pipeline above — watch each handoff, and the order state on the right.</p><span class="hint">PRESS ▶ PLAY</span></div>`;
+  if(autoplay)play();
+}
+async function play(){
+  const k=current,sc=SCEN[k],t=++runToken;
+  completed.clear();stEls.forEach(el=>el.classList.remove('done','active'));
+  fill.style.width='0px';orb.classList.remove('go');
+  renderTicket(sc.ticket);scene.innerHTML='';
+  await sleep(350);
+  for(let i=0;i<sc.steps.length;i++){
+    if(dead(t))return;
+    const s=sc.steps[i];
+    stepc.textContent='STEP '+(i+1)+' / '+sc.steps.length;
+    setNarr(s.text);
+    await moveOrb(s.st);if(dead(t))return;
+    if(s.ticket!=null)setTicket(s.ticket);
+    await s.scene(scene,()=>dead(t));
+    if(dead(t))return;
+    await sleep(650);
+  }
+  if(dead(t))return;
+  stEls.forEach(el=>{el.classList.add('done');el.classList.remove('active');});
+  setTicket(sc.ticket.length);
+  setNarr('End to end — one WhatsApp message to a delivered order. ✦');
+}
+$('#playBtn').onclick=()=>play();
+select('online',false);
+</script>
+</body>
+</html>

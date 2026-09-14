@@ -297,7 +297,64 @@
   .hero p{color:var(--dim);font-size:13.5px;max-width:460px;line-height:1.7}
   .hero .hint{font-size:11px;letter-spacing:1.5px;color:var(--amber);font-weight:800;animation:tkpulse 1.6s infinite}
 
-  @media (max-width:980px){.ticket{display:none}.stage{flex-direction:column}}
+  @media (max-width:980px){.stage{flex-direction:column}.ticket{width:auto}}
+  @media (max-width:640px){
+    header{padding:14px 14px 2px;align-items:flex-start}
+    .logo{height:42px}
+    h1{font-size:16px}
+    .brand p{font-size:10.5px}
+    .controls{width:100%;justify-content:space-between;gap:8px}
+    .pill{font-size:11px;padding:7px 10px}
+    .play{padding:9px 16px;font-size:12px}
+    main{padding:2px 12px 12px;gap:10px}
+
+    /* compact journey track */
+    .track{height:86px}
+    .line,.fill{top:32px}
+    .orb{top:32px;width:20px;height:20px;margin:-10px 0 0 -10px}
+    .st{padding-top:16px;gap:5px}
+    .st-ic{width:30px;height:30px;border-radius:9px}
+    .st-ic svg{width:15px;height:15px}
+    .st-lb{font-size:7.5px;letter-spacing:.2px}
+
+    /* scene grows, scrolls if needed */
+    .scene{min-height:390px;overflow-y:auto;align-items:start;padding:10px 0}
+    .phone{width:272px;height:376px}
+    .miniphone{width:min(270px,86vw)}
+    .duo{flex-direction:column;gap:14px;padding:6px 0}
+    .road{height:120px}
+    .truck{width:92px;top:28px}
+    .house-d{top:18px;width:52px;font-size:8px}
+    .timer{font-size:40px}
+    .otp b{width:44px;height:54px;font-size:22px}
+    .centre-col h2{font-size:19px}
+    .centre-col p{font-size:12px}
+    .dcard b{font-size:11px}.dcard span{font-size:9px}
+    .hero h2{font-size:21px}.hero p{font-size:12.5px}
+
+    /* order state becomes a wrap strip under the scene */
+    .ticket{padding:12px 14px}
+    .ticket h3{margin-bottom:10px}
+    .ticket ul{flex-direction:row;flex-wrap:wrap;gap:7px}
+    .tk{font-size:10px;gap:6px}
+    .tk .dot{width:14px;height:14px;font-size:8px}
+    .ticket .tot{margin-top:10px;padding-top:8px;font-size:10px}
+
+    .narr{padding:11px 13px;flex-direction:column;align-items:flex-start;gap:5px}
+    #narrText{font-size:12.5px}
+
+    /* batch map stacks */
+    .mapwrap{flex-direction:column}
+    .mapbox{min-height:230px}
+    .stats{width:auto;display:grid;grid-template-columns:1fr 1fr}
+    .stat b{font-size:18px}
+    .stat{padding:9px 11px}
+  }
+  @media (max-width:380px){
+    .st-lb{font-size:7px}
+    .pill{font-size:10px;padding:6px 9px}
+    .phone{width:250px;height:360px}
+  }
 </style>
 </head>
 <body>
